@@ -56,7 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const tierStr = String(tierValue).trim().toLowerCase();
         
-        if (!isNaN(tierStr) && tierStr.length > 0) {
+        if (!isNaN(tierStr) && tierStr !== '') {
             const score = parseFloat(tierStr);
             return Math.max(0, Math.min(100, score));
         }
@@ -87,8 +87,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 wordData = parseData(jsonData);
                 log(`${wordData.length}件の単語を読み込みました。`, 'success');
-                // ファイル読み込み直後にプレビューを自動更新
-                generateWordCloud(true);
+                // ファイル読み込み直後にプレビューボタンを押すことで、ユーザー操作と同じ流れにする
+                elements.previewBtn.click();
             } catch (err) {
                 log(`ファイル処理エラー: ${err.message}`, 'danger');
                 console.error(err);
@@ -117,6 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         wordData = parseData(data);
+        log(`${wordData.length}件の単語をテキストから読み込みました。`, 'info');
     };
     
     const createColorFunction = (mainColorHex) => {
@@ -137,11 +138,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const [r, g, b] = hexToRgb(mainColorHex);
 
         return (word, weight, fontSize, distance, theta) => {
-            const alpha = 0.6 + (weight / 100) * 0.4;
+            const alpha = 0.5 + (weight / 100) * 0.5;
             return `rgba(${r},${g},${b},${alpha})`;
         };
     };
 
+    // --- ▼▼▼ 修正箇所 ▼▼▼ ---
     const generateWordCloud = (isPreview) => {
         if (wordData.length === 0) {
             handleTextInput();
@@ -158,7 +160,6 @@ document.addEventListener('DOMContentLoaded', () => {
         let width = parseInt(elements.widthInput.value);
         let height = parseInt(elements.heightInput.value);
         
-        // プレビューの場合、表示サイズをコンテナに合わせる
         if (isPreview) {
             const max_size = CONFIG.PREVIEW_MAX_SIZE;
             if (width > height) {
@@ -171,20 +172,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         const list = wordData.map(item => [item.word, item.score]);
-        
-        // --- ▼▼▼ 最重要修正箇所 ▼▼▼ ---
-        // 描画対象のキャンバス要素とそのコンテナを取得
-        const targetCanvas = isPreview ? elements.canvas : document.createElement('canvas');
-        
-        // キャンバスの描画サイズをピクセル単位で正確に設定
-        targetCanvas.width = width;
-        targetCanvas.height = height;
-
-        // プレビューの場合、表示コンテナのアスペクト比も調整
-        if (isPreview) {
-             elements.previewContainer.style.paddingTop = `${(height / width) * 100}%`;
-        }
-        // --- ▲▲▲ 最重要修正箇所 ▲▲▲ ---
 
         const options = {
             list: list,
@@ -197,24 +184,33 @@ document.addEventListener('DOMContentLoaded', () => {
             shape: elements.shapeSelect.value,
         };
 
-        // 描画処理を少し遅延させて安定化
-        setTimeout(() => {
+        // requestAnimationFrame を使い、ブラウザの描画準備が整った最適なタイミングで実行する
+        requestAnimationFrame(() => {
             try {
-                // targetCanvasに対して描画を実行
-                WordCloud(targetCanvas, options);
-                
                 if (isPreview) {
+                    elements.previewContainer.style.paddingTop = `${(height/width) * 100}%`;
+                    // canvasのサイズをオプションに合わせる
+                    elements.canvas.width = width;
+                    elements.canvas.height = height;
+                    WordCloud(elements.canvas, options);
                     log('プレビューを更新しました。', 'success');
                 } else {
-                    // ダウンロード処理
-                    const dataUrl = targetCanvas.toDataURL('image/png');
-                    const link = document.createElement('a');
-                    link.href = dataUrl;
-                    link.download = 'wordcloud.png';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    log('画像を保存しました！', 'success');
+                    const offscreenCanvas = document.createElement('canvas');
+                    offscreenCanvas.width = width;
+                    offscreenCanvas.height = height;
+                    WordCloud(offscreenCanvas, options);
+                    
+                    // 描画完了を待つためのsetTimeoutは引き続き有効
+                    setTimeout(() => {
+                        const dataUrl = offscreenCanvas.toDataURL('image/png');
+                        const link = document.createElement('a');
+                        link.href = dataUrl;
+                        link.download = 'wordcloud.png';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        log('画像を保存しました！', 'success');
+                    }, 500);
                 }
             } catch (err) {
                 log(`描画エラーが発生しました: ${err.message}`, 'danger');
@@ -222,8 +218,9 @@ document.addEventListener('DOMContentLoaded', () => {
             } finally {
                 setUiEnabled(true);
             }
-        }, 100);
+        });
     };
+    // --- ▲▲▲ 修正箇所 ▲▲▲ ---
     
     // --- UI制御 ---
 
