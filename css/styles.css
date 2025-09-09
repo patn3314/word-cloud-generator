@@ -1,0 +1,58 @@
+/* グローバルスタイル */
+body {
+    font-family: 'Noto Sans JP', sans-serif;
+    background-color: #f8f9fa; /* 薄いグレーの背景 */
+}
+
+/* ヘッダー */
+.navbar-brand {
+    font-weight: bold;
+}
+
+/* プレビューコンテナ */
+#previewContainer {
+    position: relative;
+    width: 100%;
+    /* アスペクト比を16:9に保つためのパディングトリック */
+    padding-top: 56.25%; 
+    height: 0;
+    overflow: hidden;
+    transition: all 0.3s ease-in-out;
+}
+
+#wordCloudCanvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+#placeholder {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+/* ログメッセージ */
+#logContainer .alert {
+    animation: fadeIn 0.5s;
+    font-size: 0.9em;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* モバイル端末でのレスポンシブ対応 */
+@media (max-width: 991.98px) {
+    #previewContainer {
+        /* モバイルでは少し高さを確保 */
+        min-height: 300px;
+        height: auto;
+        padding-top: 0;
+    }
+}
