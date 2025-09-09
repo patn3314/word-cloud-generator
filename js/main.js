@@ -48,15 +48,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const sampleModal = new bootstrap.Modal(document.getElementById('sampleModal'));
     let wordData = [];
 
-    // --- ロジック (WordCloudLogic相当) ---
+    // --- ロジック ---
 
     const convertTierToScore = (tierValue) => {
-        if (tierValue === null || tierValue === undefined || tierValue === '') {
+        if (tierValue === null || tierValue === undefined || String(tierValue).trim() === '') {
             return CONFIG.DEFAULT_SCORE;
         }
         const tierStr = String(tierValue).trim().toLowerCase();
         
-        if (!isNaN(tierStr) && tierStr.length > 0) {
+        if (!isNaN(tierStr)) {
             const score = parseFloat(tierStr);
             return Math.max(0, Math.min(100, score));
         }
@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const parseData = (data) => {
         return data
-            .map(row => ({ word: String(row[0]).trim(), score: convertTierToScore(row[1]) }))
+            .map(row => ({ word: String(row[0] || '').trim(), score: convertTierToScore(row[1]) }))
             .filter(item => item.word);
     };
 
@@ -87,14 +87,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 wordData = parseData(jsonData);
                 log(`${wordData.length}件の単語を読み込みました。`, 'success');
-                elements.previewBtn.click(); // 自動でプレビューを更新
+                elements.previewBtn.click();
             } catch (err) {
                 log(`ファイル処理エラー: ${err.message}`, 'danger');
+                console.error(err);
             }
         };
         
-        reader.onerror = () => {
+        reader.onerror = (err) => {
              log(`ファイル読み込みエラーが発生しました。`, 'danger');
+             console.error(err);
         };
 
         reader.readAsArrayBuffer(file);
@@ -120,16 +122,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const createColorFunction = (mainColorHex) => {
         const hexToRgb = (hex) => {
             let r = 0, g = 0, b = 0;
-            if (hex.length == 4) {
-                r = "0x" + hex[1] + hex[1];
-                g = "0x" + hex[2] + hex[2];
-                b = "0x" + hex[3] + hex[3];
-            } else if (hex.length == 7) {
-                r = "0x" + hex[1] + hex[2];
-                g = "0x" + hex[3] + hex[4];
-                b = "0x" + hex[5] + hex[6];
+            if (hex.length === 4) {
+                r = parseInt(hex[1] + hex[1], 16);
+                g = parseInt(hex[2] + hex[2], 16);
+                b = parseInt(hex[3] + hex[3], 16);
+            } else if (hex.length === 7) {
+                r = parseInt(hex[1] + hex[2], 16);
+                g = parseInt(hex[3] + hex[4], 16);
+                b = parseInt(hex[5] + hex[6], 16);
             }
-            return [Number(r), Number(g), Number(b)];
+            return [r, g, b];
         };
 
         const [r, g, b] = hexToRgb(mainColorHex);
@@ -140,7 +142,6 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     };
 
-    // --- ▼▼▼ ここからが修正箇所 ▼▼▼ ---
     const generateWordCloud = (isPreview) => {
         if (wordData.length === 0) {
             handleTextInput();
@@ -160,10 +161,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isPreview) {
             const max_size = CONFIG.PREVIEW_MAX_SIZE;
             if (width > height) {
-                height = parseInt(height * (max_size / width));
+                height = Math.round(height * (max_size / width));
                 width = max_size;
             } else {
-                width = parseInt(width * (max_size / height));
+                width = Math.round(width * (max_size / height));
                 height = max_size;
             }
         }
@@ -181,10 +182,9 @@ document.addEventListener('DOMContentLoaded', () => {
             shape: elements.shapeSelect.value,
             width: width,
             height: height,
-            clearCanvas: true,
         };
 
-        // setTimeoutで描画処理を囲むことで、タイミング問題を回避する
+        // 100ミリ秒待ってから実行することで、ブラウザの描画準備を確実にする
         setTimeout(() => {
             try {
                 if (isPreview) {
@@ -197,7 +197,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     offscreenCanvas.height = height;
                     WordCloud(offscreenCanvas, options);
                     
-                    // 描画完了を少し待ってからダウンロード
                     setTimeout(() => {
                         const dataUrl = offscreenCanvas.toDataURL('image/png');
                         const link = document.createElement('a');
@@ -215,18 +214,14 @@ document.addEventListener('DOMContentLoaded', () => {
             } finally {
                 setUiEnabled(true);
             }
-        }, 0); // 0ミリ秒後に実行 = イベントキューの最後に追加
+        }, 100);
     };
-    // --- ▲▲▲ ここまでが修正箇所 ▲▲▲ ---
     
-    // --- UI制御 (WordCloudGUI相当) ---
+    // --- UI制御 ---
 
     const initAspectRatioOptions = () => {
         Object.keys(CONFIG.ASPECT_RATIOS).forEach(key => {
-            const option = document.createElement('option');
-            option.value = key;
-            option.textContent = key;
-            elements.aspectRatioSelect.appendChild(option);
+            elements.aspectRatioSelect.add(new Option(key, key));
         });
     };
     
@@ -280,16 +275,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const alert = document.createElement('div');
         alert.className = `alert alert-${type} alert-dismissible fade show p-2 mb-2`;
         alert.setAttribute('role', 'alert');
-        alert.innerHTML = `
-            ${message}
-            <button type="button" class="btn-close p-2" data-bs-dismiss="alert" aria-label="Close"></button>
-        `;
+        alert.innerHTML = `${message}<button type="button" class="btn-close p-2" data-bs-dismiss="alert" aria-label="Close"></button>`;
         elements.logContainer.prepend(alert);
+
         if (elements.logContainer.children.length > 5) {
             elements.logContainer.lastChild.remove();
         }
     };
-
 
     // --- イベントリスナーの登録 ---
     elements.aspectRatioSelect.addEventListener('change', onAspectRatioChange);
