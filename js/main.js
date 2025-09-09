@@ -56,7 +56,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const tierStr = String(tierValue).trim().toLowerCase();
         
-        // 数値かどうかチェック
         if (!isNaN(tierStr) && tierStr.length > 0) {
             const score = parseFloat(tierStr);
             return Math.max(0, Math.min(100, score));
@@ -110,7 +109,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const lines = text.split('\n').filter(line => line.trim() !== '');
         const data = lines.map(line => {
-             // カンマ、タブ、複数のスペースなど、柔軟な区切り文字に対応
             const parts = line.split(/[\t, ]+/).filter(p => p);
             return [parts[0], parts.slice(1).join(' ')];
         });
@@ -120,7 +118,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     const createColorFunction = (mainColorHex) => {
-        // 16進数カラーコードをRGBに変換
         const hexToRgb = (hex) => {
             let r = 0, g = 0, b = 0;
             if (hex.length == 4) {
@@ -137,18 +134,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const [r, g, b] = hexToRgb(mainColorHex);
 
-        // メインカラーを基準に濃淡のバリエーションを返す関数を生成
         return (word, weight, fontSize, distance, theta) => {
-            // weightはwordcloud2.jsではスコアの最大値に対する比率になる
-            // スコアが高いほど濃い色にする
             const alpha = 0.5 + (weight / 100) * 0.5;
             return `rgba(${r},${g},${b},${alpha})`;
         };
     };
 
+    // --- ▼▼▼ ここからが修正箇所 ▼▼▼ ---
     const generateWordCloud = (isPreview) => {
         if (wordData.length === 0) {
-            handleTextInput(); // テキスト入力があればパース
+            handleTextInput();
             if (wordData.length === 0) {
                 log('ワードクラウドを生成するためのデータがありません。', 'warning');
                 return;
@@ -173,50 +168,56 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        // wordcloud2.jsは weight 値でフォントサイズが決まるため、スコアをそのままリストにする
         const list = wordData.map(item => [item.word, item.score]);
 
         const options = {
             list: list,
             gridSize: Math.round(16 * width / 1024),
-            weightFactor: (size) => (size * width) / 500, // フォントサイズ調整
+            weightFactor: (size) => (size * width) / 500,
             fontFamily: "'Noto Sans JP', sans-serif",
             color: createColorFunction(elements.mainColorInput.value),
             backgroundColor: elements.backgroundColorSelect.value === 'transparent' ? 'rgba(0,0,0,0)' : elements.backgroundColorSelect.value,
-            rotateRatio: 0, // 水平固定
+            rotateRatio: 0,
             shape: elements.shapeSelect.value,
             width: width,
             height: height,
             clearCanvas: true,
         };
-        
-        if (isPreview) {
-            // プレビューコンテナのサイズを調整
-            elements.previewContainer.style.paddingTop = `${(height/width) * 100}%`;
-            WordCloud(elements.canvas, options);
-            log('プレビューを更新しました。', 'success');
-            setUiEnabled(true);
-        } else {
-            // ダウンロード用には非表示のcanvasを使う
-            const offscreenCanvas = document.createElement('canvas');
-            offscreenCanvas.width = width;
-            offscreenCanvas.height = height;
-            WordCloud(offscreenCanvas, options);
-            
-            // 少し待ってからダウンロードリンクを作成（描画完了を待つ）
-            setTimeout(() => {
-                const dataUrl = offscreenCanvas.toDataURL('image/png');
-                const link = document.createElement('a');
-                link.href = dataUrl;
-                link.download = 'wordcloud.png';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                log('画像を保存しました！', 'success');
+
+        // setTimeoutで描画処理を囲むことで、タイミング問題を回避する
+        setTimeout(() => {
+            try {
+                if (isPreview) {
+                    elements.previewContainer.style.paddingTop = `${(height/width) * 100}%`;
+                    WordCloud(elements.canvas, options);
+                    log('プレビューを更新しました。', 'success');
+                } else {
+                    const offscreenCanvas = document.createElement('canvas');
+                    offscreenCanvas.width = width;
+                    offscreenCanvas.height = height;
+                    WordCloud(offscreenCanvas, options);
+                    
+                    // 描画完了を少し待ってからダウンロード
+                    setTimeout(() => {
+                        const dataUrl = offscreenCanvas.toDataURL('image/png');
+                        const link = document.createElement('a');
+                        link.href = dataUrl;
+                        link.download = 'wordcloud.png';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        log('画像を保存しました！', 'success');
+                    }, 500);
+                }
+            } catch (err) {
+                log(`描画エラーが発生しました: ${err.message}`, 'danger');
+                console.error(err);
+            } finally {
                 setUiEnabled(true);
-            }, 500);
-        }
+            }
+        }, 0); // 0ミリ秒後に実行 = イベントキューの最後に追加
     };
+    // --- ▲▲▲ ここまでが修正箇所 ▲▲▲ ---
     
     // --- UI制御 (WordCloudGUI相当) ---
 
@@ -253,7 +254,6 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.backgroundColorSelect.value = CONFIG.DEFAULT_BACKGROUND_COLOR;
         elements.shapeSelect.value = 'rectangle';
 
-        // プレビューをリセット
         const ctx = elements.canvas.getContext('2d');
         ctx.clearRect(0, 0, elements.canvas.width, elements.canvas.height);
         elements.placeholder.style.display = 'flex';
@@ -271,7 +271,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ];
         controls.forEach(el => el.disabled = !enabled);
         
-        // アスペクト比の状態を復元
         if (enabled) {
             onAspectRatioChange();
         }
@@ -286,7 +285,6 @@ document.addEventListener('DOMContentLoaded', () => {
             <button type="button" class="btn-close p-2" data-bs-dismiss="alert" aria-label="Close"></button>
         `;
         elements.logContainer.prepend(alert);
-        // 古いログを削除
         if (elements.logContainer.children.length > 5) {
             elements.logContainer.lastChild.remove();
         }
@@ -310,4 +308,4 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     init();
-}); 
+});
